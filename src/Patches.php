@@ -60,6 +60,7 @@ class Patches implements PluginInterface, EventSubscriberInterface {
     $this->eventDispatcher = $composer->getEventDispatcher();
     $this->executor = new ProcessExecutor($this->io);
     $this->patches = array();
+    $this->installedPatches = array();
   }
 
   /**
@@ -99,6 +100,9 @@ class Patches implements PluginInterface, EventSubscriberInterface {
 
       foreach ($packages as $package) {
         $extra = $package->getExtra();
+        if (isset($extra['patches'])) {
+          $this->installedPatches[$package->getName()] = $extra['patches'];
+        }
         $patches = isset($extra['patches']) ? $extra['patches'] : array();
         $tmp_patches = array_merge_recursive($tmp_patches, $patches);
       }
@@ -164,15 +168,16 @@ class Patches implements PluginInterface, EventSubscriberInterface {
           }
           $this->patches = array_merge_recursive($this->patches, $extra['patches']);
         }
+        // Unset installed patches for this package
+        if(isset($this->installedPatches[$package->getName()])) {
+          unset($this->installedPatches[$package->getName()]);
+        }
       }
     }
 
-    $local_patches = $this->grabPatches();
-    if (empty($local_patches)) {
-      $this->io->write('<info>No patches supplied.</info>');
-    }
-    else {
-      $this->patches = array_merge_recursive($this->patches, $local_patches);
+    // Merge installed patches from dependencies that did not receive an update.
+    foreach ($this->installedPatches as $patches) {
+      $this->patches = array_merge_recursive($this->patches, $patches);
     }
 
     // If we're in verbose mode, list the projects we're going to patch.
